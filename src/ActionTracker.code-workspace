@@ -1,0 +1,65 @@
+{
+	"folders": [
+		{
+			"name": "ActionTracker",
+			"path": ".."
+		}
+	],
+	"settings": {"better-comments.tags": [
+		{
+		  "tag": "!",
+		  "color": "white",
+		  "strikethrough": false,
+		  "underline": false,
+		  "backgroundColor": "red",
+		  "bold": true,
+		  "italic": false
+		},
+		{
+		  "tag": "todo",
+		  "color": "red",
+		  "strikethrough": false,
+		  "underline": false,
+		  "backgroundColor": "yellow",
+		  "bold": false,
+		  "italic": false
+		},
+		{
+		  "tag": "?",
+		  "color": "#3498DB",
+		  "strikethrough": false,
+		  "underline": false,
+		  "backgroundColor": "transparent",
+		  "bold": false,
+		  "italic": false
+		},
+		{
+		  "tag": "//",
+		  "color": "green",
+		  "strikethrough": true,
+		  "underline": false,
+		  "backgroundColor": "transparent",
+		  "bold": false,
+		  "italic": false
+		},
+		{
+		  "tag": "-",
+		  "color": "white",
+		  "strikethrough": false,
+		  "underline": false,
+		  "backgroundColor": "green",
+		  "bold": false,
+		  "italic": false
+		},
+		{
+		  "tag": "*",
+		  "color": "yellow",
+		  "strikethrough": false,
+		  "underline": false,
+		  "backgroundColor": "blue",
+		  "bold": true,
+		  "italic": false
+		}
+	  ]},
+	
+}
