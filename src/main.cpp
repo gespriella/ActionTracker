@@ -29,7 +29,6 @@ String serverName = "https://192.168.1.135:7216/api/SensorReadings";
 #define OLED_RESET     4
 #define SCREEN_ADDRESS 0x3C
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-String currentActivity = "Inconclusive...";
 
 //* Time and Timers
 const char* ntpServer = "pool.ntp.org";
@@ -48,7 +47,12 @@ TinyGPSPlus gps;
 #define SDA_PIN 21
 #define SLC_PIN 22
 
-//* Sensor Variables and Structs
+//* Variables and Structs
+
+bool recordingMode = false;
+String activities[6]={"Walking","Abs", "Jumping","Squats","Twists", "Running"};
+static volatile byte activityNumber = 5;
+String currentActivity = "Inconclusive...";
 double latitude = 0, longitude = 0;
 int altitude = 0, satellites = 0;
 const int arraySize = 50;
@@ -63,7 +67,28 @@ int arrayIndex = 0;
 TaskHandle_t Task2;
 
 //! FUNCTIONS ////////////////////////////////////////////
-//! taskCore2 FUNCTION
+//! displayActivity: Display the predicted activity in the OLED FUNCTION
+void displayActivity(String activity){
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print("Current Activity:");
+  display.setTextSize(2);
+  display.setCursor(10,10);
+  display.print(activity);
+  display.display();
+}
+//! displayRecording: Display RECORDING in the OLED FUNCTION
+void displayRecording(){
+  display.fillScreen(SSD1306_WHITE);
+  display.setTextSize(2);
+  display.setCursor(10,10);
+  display.setTextColor(SSD1306_BLACK);
+  display.print("RECORDING");
+  display.display();
+}
+//! taskCore2: FUNCTION
 void taskCore2( void * pvParameters ){
   for(;;){
     delay(1);
@@ -90,38 +115,28 @@ void taskCore2( void * pvParameters ){
       }
       arrayIndex=0;//- Setting arrayIndex to 0 here allow the other core to continue
       HTTPClient httpClient;
-      httpClient.begin(serverName + "/Multiple");
+      if (recordingMode){
+        httpClient.begin(serverName + "/Multiple");
+      } else {
+        httpClient.begin("http://192.168.1.135:1080/predict");
+      }
       httpClient.addHeader("Content-Type", "application/json");
       String json;
       serializeJson(doc, json);
-      ////Serial.println(json);
       Serial.println(httpClient.POST(json));
+      if (!recordingMode){
+        DynamicJsonDocument docResult(256);
+        deserializeJson(docResult, httpClient.getStream());
+        activityNumber=docResult["prediction"].as<byte>();
+        Serial.println(activityNumber);
+      }
       httpClient.end(); 
     }
   }
 }
-//! displayActivity FUNCTION
-void displayActivity(){
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0,0);
-  display.print("Current Activity:");
-  display.setCursor(10,10);
-  display.print("Inconclusive...");
-  display.display();
-}
-//! displayRecording FUNCTION
-void displayRecording(){
-  display.fillScreen(SSD1306_WHITE);
-  display.setTextSize(2);
-  display.setCursor(10,10);
-  display.setTextColor(SSD1306_BLACK);
-  display.print("RECORDING");
-  display.display();
-}
-//! readWT901 FUNCTION
+//! readWT901: Reading the WT901 sensor FUNCTION
 bool readWT901(void *){
+  //- Get sensor readings into global variables
   JY901.GetAcc();
   JY901.GetGyro();
   JY901.GetAngle();
@@ -149,17 +164,13 @@ bool readWT901(void *){
     //-If array is at limit, wait until other core takes care of passing array to json
     if(arrayIndex>=arraySize){
       ulong initialTime=millis();
-      while(arrayIndex>=arraySize) delay(5);
+      while(arrayIndex>=arraySize) delay(1);
       Serial.print("Core 0 was idle for: "); Serial.println(millis()-initialTime);
     }
   }
-  // // Serial.print("Acc:");Serial.print(accelerometer.x);Serial.print(" ");Serial.print(accelerometer.y);Serial.print(" ");Serial.println(accelerometer.z);  
-  // // Serial.print("Gyro:");Serial.print(gyroscope.x);Serial.print(" ");Serial.print(gyroscope.y);Serial.print(" ");Serial.println(gyroscope.z);
-  // // Serial.print("Angle:");Serial.print(angle.x);Serial.print(" ");Serial.print(angle.y);Serial.print(" ");Serial.println(angle.z);
-  // // Serial.println("-----------------------");
   return true;
 }
-//! readGPS FUNCTION
+//! readGPS: Reading the GPS NEO 6m sensor FUNCTION
 bool readGPS(void *){
   boolean newData = false;
   //- Read GPS serial info until there's no more
@@ -184,7 +195,6 @@ bool readGPS(void *){
 }
 //! SETUP FUNCTION ////////////////////////////////////////////
 void setup(){
-
   //- Rec Button Setup
   button.attach(BUTTON_PIN, INPUT_PULLUP);
   button.interval(20);
@@ -205,7 +215,7 @@ void setup(){
 
   //- Screen Setup
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) Serial.println(F("SSD1306 allocation failed"));
-  displayActivity();
+  displayActivity(currentActivity);
   //- GPS setup
   neogps.begin(9600, SERIAL_8N1, RXD2, TXD2);
   //- WT901 Setup
@@ -218,18 +228,21 @@ void setup(){
   Serial.print("Epoch Time: ");
   Serial.println(initialEpoch);
   //-Initialize timed Events
-  delay(2000);
-  xTaskCreatePinnedToCore(taskCore2,"Task2",10000,NULL,1,&Task2,0);
+  // delay(2000);
   timerWT901.every(1000 / WT901_HZ, readWT901);
   timerGPS.every(1000, readGPS);
+  xTaskCreatePinnedToCore(taskCore2,"Task2",10000,NULL,1,&Task2,0);
 }
 //! LOOP FUNCTION ////////////////////////////////////////////
 void loop(){
   button.update();
   if (button.pressed()) {
     startRecoding=!startRecoding;
-    if(startRecoding) displayRecording();
-    else displayActivity();
+  }
+  if(startRecoding && recordingMode) {
+    displayRecording();
+  } else {
+    displayActivity(activities[activityNumber]);
   }
   timerWT901.tick();
   timerGPS.tick();
